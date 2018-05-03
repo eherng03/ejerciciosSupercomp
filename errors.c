@@ -97,15 +97,14 @@ int main(void)
 
 
   /* Example 5 (this example contains an OpenMP parallelization error) */
-  /* --------- */
+  /* ----SOLUTION: reduction(+:sum)----- */
 
   sum = 0; 
-# pragma omp parallel for
+# pragma omp parallel for reduction(+:sum)
   for (i=1; i<N; i++)
   {
     sum = sum + b[i];
   } /* end of omp parallel for */ 
-  sum_expected = a[N-1]-a[0];
   /* testing the correctness of the numerical result: */
   /* sum_expected = same as in Exa.2 */
   printf("Exa.5: sum  computed=%8.1f,  expected=%8.1f,  difference=%8.5f \n", 
