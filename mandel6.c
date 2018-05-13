@@ -12,9 +12,8 @@ void computing (struct Img * image, unsigned nb_iter, double x_min, double x_max
 
     #pragma omp parallel
     {
-    	#pragma omp for schedule(guided) private(col)
+    	#pragma omp for schedule(dynamic) private(col)
 	    for (row = 0; row < image->height; row++) {
-    		#pragma omp parallel for
     		for (col = 0; col < image->width; col++) {
     			struct Complex z,c;
     			double aux;
