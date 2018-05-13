@@ -11,7 +11,7 @@ void computing (struct Img * image, unsigned nb_iter, double x_min, double x_max
     omp_set_nested(1);
     #pragma omp parallel
     {
-    	    #pragma omp for private(col)
+    	    #pragma omp for nowait private(col)
 	    for (row = 0; row < image->height; row++) {
 
 		for (col = 0; col < image->width; col++) {
