@@ -20,7 +20,7 @@ int main(void)
   int num_threads;
 
   /* Example 1 (this example contains an OpenMP parallelization error) */
-  /* --------- */
+  /* -----SOLUTION: # pragma ordered parallel for---- */
 
   a[0] = 0;
 # pragma ordered parallel for
@@ -64,7 +64,7 @@ int main(void)
 
 
   /* Example 3 (this example contains an OpenMP parallelization error) */
-  /* --------- */
+  /* ----SOLUTION: # pragma ordered parallel for----- */
 
 # pragma ordered parallel for
   for (i=1; i<N; i++)
@@ -80,7 +80,7 @@ int main(void)
                                  sum,  sum_expected, sum-sum_expected); 
 
   /* Example 4 (this example contains an OpenMP parallelization error) */
-  /* --------- */
+  /* ----SOLUTION: lastprivate(x) firstprivate(f)----- */
 
   f = 2;
 # pragma omp parallel for lastprivate(x) firstprivate(f)
