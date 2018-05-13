@@ -7,7 +7,7 @@ void computing (struct Img * image, unsigned nb_iter, double x_min, double x_max
     double scale_real = (x_max - x_min) / image -> width;
     double scale_imaginary = (y_max - y_min) / image -> height;
 
-
+    omp_set_num_threads(15);
     omp_set_nested(1);
     #pragma omp parallel
     {
