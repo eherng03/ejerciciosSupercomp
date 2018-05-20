@@ -3,43 +3,40 @@
 #include <stdlib.h>
 #include <time.h>
 
-	/*======================================================================================
-	*																					   *
-	*		                            VARIABLES GLOBALES		                    	   *
-	*																					   *
-	======================================================================================*/
+	/*======================================================================================*
+	*		                    VARIABLES GLOBALES		                        *
+	*=======================================================================================*/
 
 #define MATRIX_SIZE 10000
 #define MASTER_ID 0
 #define MAX_VALUE 100
 
-	/*======================================================================================
-	*																					   *
-	*		                          DECLARACION DE FUNCIONES		                    	   *
-	*																					   *
-	======================================================================================*/
 
-void normalizeVetor(int * V, int length, int maxValue);
-int findMax(int * vec, int size);
-void printMatrix(int M[MATRIX_SIZE][MATRIX_SIZE]);
-void fillMatrix(int M[MATRIX_SIZE][MATRIX_SIZE]);
+	/*======================================================================================*
+	*		                DECLARACION DE FUNCIONES		                *
+	*=======================================================================================*/
 
+void normalizeVetor(float * V, int length, int maxValue);
+int findMax(float * vec, int size);
 
 int main(int argc, char *argv[])
 {
+	printf("Iniciando programa...\n");
 	MPI_Status info;
-	int rank, size, nRowsPerProcess, sendCount;
+	int rank, size, nRowsPerProcess, sendCount, i, j;
 	float matrix[MATRIX_SIZE][MATRIX_SIZE];
+	float newMatrix[MATRIX_SIZE][MATRIX_SIZE];
 	float init_time, end_time, result, globalMax;
-
-	result = 0;
+	time_t t;
+	
+	result = 0.0;
 	globalMax = 0;
 
-	srand(time(NULL));
+	srand((unsigned) time(&t));
 
-	/*======================================================================================																				   *
-	*		      Cada proceso va a recivir (MATRIX_SIZE/Nº of process) columnas.			   *
-	=======================================================================================*/
+	/*======================================================================================*
+	*        Cada proceso va a recivir (MATRIX_SIZE/Nº of process) columnas.	        *
+	*=======================================================================================*/
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD,&size);
@@ -53,10 +50,17 @@ int main(int argc, char *argv[])
 
 
 	// El master rellena su matriz con numeros aleatorios entre 0 y 100
-	if(rank == MASTER_PROCESS_ID){
-		fillMatrix(&matrix);
+	if(rank == MASTER_ID){
+		printf("Master rellenando matriz...\n");
+		for (i = 0; i < MATRIX_SIZE; i++){
+			for (j = 0; j < MATRIX_SIZE; j++){
+				newMatrix[i][j] = 0;
+				matrix[i][j] = rand()%MAX_VALUE;
+			}
+		}
 	}else{
-		//Si el proceso no es el master inicializa su matriz con ceros
+		//Si el proceso no es el master inicializa su matriz con ceros	
+		printf("Hilo %d rellenando matriz...\n", rank);
 		for (i = 0; i < MATRIX_SIZE; i++){
 			for (j = 0; j < MATRIX_SIZE; j++){
 				matrix[i][j] = 0;
@@ -64,12 +68,12 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	print("La matriz a repartir es: \n");
+	printf("La matriz a repartir es: \n");
 	for(i = 0; i < MATRIX_SIZE; i++){
 		for(j = 0; j < MATRIX_SIZE; j++){
 			printf(" %f ", matrix[i][j]);
 		}
-		print("\n");
+		printf("\n");
 	}
 
 	//Espero a todos los procesos
@@ -91,19 +95,19 @@ int main(int argc, char *argv[])
 	normalizeVetor(&matrix[nRowsPerProcess*rank][0], sendCount, globalMax);
 	
 	//Vuelo a juntar todos los datos en la matriz del maestro
-	MPI_Gather(&matrix[nRowsPerProcess * rank][0], sendCount, MPI_FLOAT, &matrix[nRowsPerProcess*rank][0], sendCount, MPI_FLOAT, MASTER_ID, MPI_COMM_WORLD);
+	MPI_Gather(&matrix[nRowsPerProcess * rank][0], sendCount, MPI_FLOAT, &newMatrix[nRowsPerProcess*rank][0], sendCount, MPI_FLOAT, MASTER_ID, MPI_COMM_WORLD);
 	
 
 	end_time = MPI_Wtime();	
-	print("La matriz final es: \n");
+	printf("La matriz final es: \n");
 	for(i = 0; i < MATRIX_SIZE; i++){
 		for(j = 0; j < MATRIX_SIZE; j++){
-			printf(" %f ", matrix[i][j]);
+			printf(" %f ", newMatrix[i][j]);
 		}
-		print("\n");
+		printf("\n");
 	}
 
-	if(rank == MASTER_PROCESS_ID)
+	if(rank == MASTER_ID)
 		printf("Numero de procesos: [%d]. Tiempo empleado: [%f].\n", size, (end_time-init_time));
 	
 	MPI_Finalize();
@@ -111,31 +115,22 @@ int main(int argc, char *argv[])
 }
 
 
-void fillMatrix(int * M[MATRIX_SIZE][MATRIX_SIZE]){
-	int i,j;
 
-	for (i = 0; i < MATRIX_SIZE; i++){
-		for (j = 0; j < MATRIX_SIZE; j++){
-			M[i][j] = rand()%MAX_VALUE;
-		}
-	}
-}
 
 void normalizeVetor(float * V, int length, int maxValue){
 	int i;
-	for (i = 0; i < length; ++i){
+	for (i = 0; i < length; i++){
 		V[i] = V[i]/maxValue;
 	}
 }
 
-int findMax(int * vec, int size){
+int findMax(float * vec, int size){
 	long max = 0;
 	int i;
-	for (i = 0; i < size; ++i){
+	for (i = 0; i < size; i++){
 		if(vec[i] > max){
 			max = vec[i];
 		}
 	}
 	return max;
 }
-
