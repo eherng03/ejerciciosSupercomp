@@ -24,8 +24,8 @@ int main(int argc, char *argv[])
 	printf("Iniciando programa...\n");
 	MPI_Status info;
 	int rank, size, nRowsPerProcess, sendCount, i, j;
-	float matrix[MATRIX_SIZE][MATRIX_SIZE];
-	float newMatrix[MATRIX_SIZE][MATRIX_SIZE];
+	float ** matrix; 
+	float * matrix2;
 	float init_time, end_time, result, globalMax;
 	time_t t;
 	
@@ -51,30 +51,43 @@ int main(int argc, char *argv[])
 
 	// El master rellena su matriz con numeros aleatorios entre 0 y 100
 	if(rank == MASTER_ID){
+		//Reserva de filas
+		matrix = (float **)malloc(MATRIX_SIZE*sizeof(float*));
+
 		printf("Master rellenando matriz...\n");
 		for (i = 0; i < MATRIX_SIZE; i++){
+			matrix[i] = (float *) malloc (MATRIX_SIZE*sizeof(float));
 			for (j = 0; j < MATRIX_SIZE; j++){
-				newMatrix[i][j] = 0;
-				matrix[i][j] = rand()%MAX_VALUE;
+				matrix[i][j] = rand()%(MAX_VALUE + 1);
 			}
 		}
+/*
+		printf("La matriz a repartir es: \n");
+		for(i = 0; i < MATRIX_SIZE; i++){
+			for(j = 0; j < MATRIX_SIZE; j++){
+				printf(" %f ", matrix[i][j]);
+			}
+			printf("\n");
+		}
+*/
 	}else{
+		printf("Hilo %d creando matriz...\n", rank);	
+		//Reserva de filas
+		matrix = (float **)malloc(MATRIX_SIZE*sizeof(float*));
+			
+
 		//Si el proceso no es el master inicializa su matriz con ceros	
-		printf("Hilo %d rellenando matriz...\n", rank);
+		
 		for (i = 0; i < MATRIX_SIZE; i++){
-			for (j = 0; j < MATRIX_SIZE; j++){
+			matrix[i] = (float *) malloc (nRowsPerProcess*sizeof(float));
+			for (j = 0; j < nRowsPerProcess; j++){
 				matrix[i][j] = 0;
 			}
 		}
+		
 	}
 
-	printf("La matriz a repartir es: \n");
-	for(i = 0; i < MATRIX_SIZE; i++){
-		for(j = 0; j < MATRIX_SIZE; j++){
-			printf(" %f ", matrix[i][j]);
-		}
-		printf("\n");
-	}
+	
 
 	//Espero a todos los procesos
 	MPI_Barrier(MPI_COMM_WORLD); 
@@ -82,34 +95,36 @@ int main(int argc, char *argv[])
 	init_time = MPI_Wtime();
 	
 	//Reparto la matriz del maestro entre todos los procesos 				
-	MPI_Scatter(&matrix[nRowsPerProcess * rank][0], sendCount, MPI_FLOAT, &matrix[nRowsPerProcess * rank][0], MATRIX_SIZE*MATRIX_SIZE, MPI_FLOAT, MASTER_ID, MPI_COMM_WORLD);
+	MPI_Scatter(&matrix[0][0], sendCount, MPI_FLOAT, &matrix[0][0], sendCount, MPI_FLOAT, MASTER_ID, MPI_COMM_WORLD);
 	
 	//busco el maximo en el trozo que he recibido datos
-	result = findMax(&matrix[nRowsPerProcess * rank][0], sendCount);
+	result = findMax(&matrix[0][0], sendCount);
 	printf("El proceso %d mola, y ha calculado el maximo: %f ", rank, result);
 
 	//El maximo global
 	MPI_Allreduce(&result, &globalMax, 1 , MPI_FLOAT, MPI_MAX, MPI_COMM_WORLD);
 	printf("El maximo global es: %f \n", globalMax);
 
-	normalizeVetor(&matrix[nRowsPerProcess*rank][0], sendCount, globalMax);
+	normalizeVetor(&matrix[0][0], sendCount, globalMax);
 	
 	//Vuelo a juntar todos los datos en la matriz del maestro
-	MPI_Gather(&matrix[nRowsPerProcess * rank][0], sendCount, MPI_FLOAT, &newMatrix[nRowsPerProcess*rank][0], sendCount, MPI_FLOAT, MASTER_ID, MPI_COMM_WORLD);
+	MPI_Gather(&matrix[0][0], sendCount, MPI_FLOAT, &matrix[0][0], sendCount, MPI_FLOAT, MASTER_ID, MPI_COMM_WORLD);
 	
 
 	end_time = MPI_Wtime();	
-	printf("La matriz final es: \n");
-	for(i = 0; i < MATRIX_SIZE; i++){
-		for(j = 0; j < MATRIX_SIZE; j++){
-			printf(" %f ", newMatrix[i][j]);
-		}
-		printf("\n");
-	}
-
-	if(rank == MASTER_ID)
-		printf("Numero de procesos: [%d]. Tiempo empleado: [%f].\n", size, (end_time-init_time));
 	
+
+	if(rank == MASTER_ID){
+	/*	printf("La matriz final es: \n");
+		for(i = 0; i < MATRIX_SIZE; i++){
+			for(j = 0; j < MATRIX_SIZE; j++){
+				printf(" %f ", matrix[i][j]);
+			}
+			printf("\n");
+		}*/
+		printf("Numero de procesos: [%d]. Tiempo empleado: [%f].\n", size, (end_time-init_time));
+	}
+	//free(matrix);
 	MPI_Finalize();
 	return 0;
 }
