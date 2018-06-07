@@ -2,6 +2,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #define TAM_MATRIX 120
 #define MAX_VALUE 9
@@ -23,17 +24,18 @@ nxn rellena con enteros aleatorios entre 0 y 9.
 	de n múltiplos de 12 (120, 1200,12000…).
 */
 
-void pintarMatriz(double **A, int rows, int cols);
-void distribuir(double **IN, int rows_in, int cols_in, double **OUT, int rows_out, int cols_out);
-void Recolectar(double **IN, int rows_in, int cols_in, double **OUT, int rows_out, int cols_out);
+void pintarMatriz(int **A, int rows, int cols);
+void distribuir(int **IN, int rows_in, int cols_in, int rows_out, int cols_out, int procs_dim, MPI_Comm cart);
 
 int main(int argc,char *argv[]){
 
 	int rank, numprocs, i,j,k,m, blockSize, suma, sumaGlobal;
-	double time; 
-	double **A, **Apeq;
+	double timeX; 
+	int **A, *Apeq;
 	int procs_dim;
 	int dims[2], periods[2];
+	MPI_Status status;
+	MPI_Datatype bloque;
 	suma = 0;
 	sumaGlobal = 0;
 
@@ -60,41 +62,45 @@ int main(int argc,char *argv[]){
 	if(rank == 0){
 
 		//Reserva de filas
-		A = (double **)malloc(TAM_MATRIX*sizeof(double*));
+		A = (int **)malloc(TAM_MATRIX*sizeof(int*));
 
 		printf("Master rellenando matriz...\n");
 		for (i = 0; i < TAM_MATRIX; i++){
-			A[i] = (float *) malloc (TAM_MATRIX*sizeof(double));
+			A[i] = (int *) malloc (TAM_MATRIX*sizeof(int));
 			for (j = 0; j < TAM_MATRIX; j++){
 				A[i][j] = rand()%(MAX_VALUE + 1);
 			}
 		}
+		printf("Master rellenado...\n");
 	}
 	// cada proceso reserva memoria para sus matrices de bloques
-	Apeq = (double **)malloc((blockSize)*sizeof(double*));
+	Apeq = (int *)malloc((blockSize*blockSize)*sizeof(int*));
 
 	printf("Proceso %d rellenando matriz...\n", rank);
-	for (i = 0; i < blockSize; i++){
-		Apeq[i] = (float *) malloc (blockSize*sizeof(double));
-		for (j = 0; j < blockSize; j++){
-			Apeq[i][j] = 0;
-		}
+	for (i = 0; i < blockSize*blockSize; i++){
+			Apeq[i] = 0;
+		
 	}
-	
+	printf("Proceso %d rellenado...\n", rank);	
 	
 	//Sincronizamos los procesos para obtener tiempos de ejecucion precisos
 	MPI_Barrier(MPI_COMM_WORLD);
-	time = MPI_Wtime(); 
+	timeX = MPI_Wtime(); 
 	
 	
 	//-------------------------------------INICIO ALGORITMO-----------------------------------------
 	//Se distribuye A entre los procesadores, los cuales reciben su bloque de datos en Apeq
-	distribuir(A,TAM_MATRIX,TAM_MATRIX, Apeq, blockSize, blockSize);
-	
-	for(i = 0;i < blockSize; i++){
-		for(j = 0;j < blockSize; j++){
-			suma = suma + Apeq[i][j];
-		}
+	distribuir(A,TAM_MATRIX,TAM_MATRIX, blockSize, blockSize, procs_dim, cart);
+
+
+	printf("Proceso %d recibe matriz...\n", rank);
+	MPI_Recv(&Apeq[0], blockSize*blockSize, MPI_INT, 0, 0 ,MPI_COMM_WORLD, &status);
+	printf("Proceso %d recibe matriz...\n", rank);
+
+		
+	for(i = 0;i < blockSize*blockSize; i++){
+			suma = suma + Apeq[i];
+		
 	}
 	
 	printf("El proceso %d, ha calculado la suma parcial: %d. \n", rank, suma);
@@ -103,10 +109,10 @@ int main(int argc,char *argv[]){
 	MPI_Allreduce(&suma, &sumaGlobal, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 	
 	//-------------------------FIN ALGORITMO--------------------------------
-	time = MPI_Wtime() - time;
+	timeX = MPI_Wtime() - timeX;
 	
 	if (rank == 0) {
-		printf("La suma total es: %d, %.16f segundos\n", sumaGlobal, time);
+		printf("La suma total es: %d, %.16f segundos\n", sumaGlobal, timeX);
 	}
     
     MPI_Finalize();
@@ -115,45 +121,48 @@ int main(int argc,char *argv[]){
 
 
 
-void pintarMatriz(double **A, int rows, int cols){
+void pintarMatriz(int **A, int rows, int cols){
 	int i,j;
 	for(i=0; i<rows; i++){
 		for(j=0; j<cols; j++)
-			printf("%.0f ",A[i][j]);
+			printf("%d ",A[i][j]);
 		printf("\n");
 	}
 }
 
 
 
-void distribuir(double **IN, int rows_in, int cols_in, double **OUT, int rows_out, int cols_out){
-	int i, j, numprocs, rank, posicion = 0, procs_dim;
+void distribuir(int **IN, int rows_in, int cols_in, int rows_out, int cols_out, int procs_dim, MPI_Comm cart){
+	int i, j, numprocs, rank, posicion = 0, proceso, coord[2];
 	//Buffer donde irán almacenados los bloques de datos
-	double * buffer;
-
+	int * buffer;
+	proceso = 0;
 	MPI_Datatype bloque;
 	
 	MPI_Comm_rank(MPI_COMM_WORLD,&rank);
 	MPI_Comm_size(MPI_COMM_WORLD,&numprocs);
 	
-	procs_dim = sqrt(numprocs);
+	
 
 	if(rank==0){
-		buffer = malloc(sizeof(double)*rows_in*cols_in);
+		buffer = malloc(sizeof(int)*rows_in*cols_in);
 		//Creamos el tipo de datos bloque, con el tamaño correspondiente
-		MPI_Type_vector(rows_out, cols_out, cols_in, MPI_DOUBLE, &bloque);
+		MPI_Type_vector(rows_out, cols_out, cols_in, MPI_INT, &bloque);
 		MPI_Type_commit(&bloque);
-		
+		printf("Proceso %d enviando...\n", rank);
 		//Empaquetamos los datos de la matriz grande en bloques pequeños
 		for(i=0;i<procs_dim;i++)
 			for(j=0;j<procs_dim;j++){
-				MPI_Pack(&IN[i*rows_out][j*cols_out], 1, bloque, buffer, sizeof(double)*rows_in*cols_in, &posicion, MPI_COMM_WORLD);	
+				coord[0]=i; 
+				coord[1]=j;
+				//Saco el numero de proceso a partir de las coordenadas
+				MPI_Cart_rank(cart, coord, &proceso);
+				printf("Enviando matriz al proceso %d...\n", proceso);
+				MPI_Send(&IN[i*rows_out][j*cols_out], 1, bloque, proceso, 0, MPI_COMM_WORLD);	
 			}
 		MPI_Type_free(&bloque);
 	}	
-	//Enviamos a cada proceso
-	MPI_Scatter(buffer, sizeof(double)*rows_out*cols_out ,MPI_PACKED, OUT[0], rows_out*cols_out, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
 	if(rank==0)	
 		free(buffer);
 }
-
